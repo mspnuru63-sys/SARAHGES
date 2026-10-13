@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#1a2340">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="RestoGest">
+<meta name="apple-mobile-web-app-title" content="restodiaf">
 <meta name="mobile-web-app-capable" content="yes">
-<title>RestoGest — Gestion de restaurant</title>
+<title>restodiaf — Gestion de restaurant</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">
@@ -276,7 +276,7 @@ img,svg{display:block;max-width:100%}
 .stock-head .s-info b{
   display:block;font-size:.9rem;font-weight:700;color:var(--text);
   line-height:1.25;word-break:break-word;
-  display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
   overflow:hidden;
 }
 .stock-head .s-info small{
@@ -818,7 +818,7 @@ img,svg,canvas,video{max-width:100%}
   <header class="header">
     <div class="logo" id="headerLogo">R</div>
     <div class="brand">
-      <b id="headerTitle">RestoGest</b>
+      <b id="headerTitle">restodiaf</b>
       <small id="headerSub">Tableau de bord</small>
     </div>
     <button class="icon-btn" id="cloudBtn" data-s="off" onclick="go('settings')" aria-label="État de la synchronisation Firebase" title="Cloud non configuré">
@@ -868,7 +868,7 @@ img,svg,canvas,video{max-width:100%}
 /* ============================================================
    INDEXEDDB
    ============================================================ */
-const DB_NAME='restogest_db', DB_VERSION=1;
+const DB_NAME='restodiaf_db', DB_VERSION=1;
 let _db=null;
 function openDB(){
   return new Promise((res,rej)=>{
@@ -948,7 +948,14 @@ const reloadSal=async()=>{STATE.sales=(await idbAll('sales')).sort((a,b)=>String
    Structure Firestore : shops/{codeBoutique}/{dishes|batches|sales|settings}/{id}
    Configuration : coller vos clés ci-dessous OU les saisir dans Paramètres.
    ============================================================ */
-const FIREBASE_CONFIG={apiKey:'',projectId:'',appId:''};
+/* ▼▼▼ COLLEZ ICI VOTRE CONFIGURATION FIREBASE (Console Firebase > Paramètres du projet > Vos applications > Web) ▼▼▼ */
+const FIREBASE_CONFIG={
+  apiKey:'AIzaSyDeEUCBIOj__0Z6hRGmMgT9P5Rb81KDlg8',      // ex : 'AIzaSy…'
+  projectId:'nuruxdata-1',   // ex : 'mon-restaurant'
+  appId:'1:74795399735:web:6b31295dc60b5d63845db2',       // ex : '1:123456789:web:abcdef' (facultatif)
+  shop:'principal' // code boutique : même valeur sur tous vos appareils
+};
+/* ▲▲▲ Une fois rempli, l'application se connecte seule à l'ouverture, sans rien saisir dans Paramètres ▲▲▲ */
 const Cloud=(()=>{
   const COLS=['dishes','batches','sales','settings'];
   const LSK='rg_firebase',OUT='rg_outbox';
@@ -958,9 +965,11 @@ const Cloud=(()=>{
   const firstDone={};
   const first=new Promise(r=>firstRes=r);
 
+  const inCode=()=>!!(FIREBASE_CONFIG.apiKey&&FIREBASE_CONFIG.projectId);
   const cfg=()=>{
+    if(inCode())return {apiKey:FIREBASE_CONFIG.apiKey,projectId:FIREBASE_CONFIG.projectId,appId:FIREBASE_CONFIG.appId||'',shop:FIREBASE_CONFIG.shop||'principal'};
     try{const c=JSON.parse(localStorage.getItem(LSK)||'null');if(c&&c.apiKey&&c.projectId)return c;}catch(e){}
-    return FIREBASE_CONFIG.apiKey&&FIREBASE_CONFIG.projectId?{apiKey:FIREBASE_CONFIG.apiKey,projectId:FIREBASE_CONFIG.projectId,appId:FIREBASE_CONFIG.appId||'',shop:'principal'}:null;
+    return null;
   };
   const shop=()=>String((cfg()||{}).shop||'principal').replace(/[^A-Za-z0-9_-]/g,'')||'principal';
   const outbox=()=>{try{return JSON.parse(localStorage.getItem(OUT)||'{}')||{};}catch(e){return {};}};
@@ -1012,7 +1021,7 @@ const Cloud=(()=>{
       tries=0;
       try{
         await loadAll();
-        const n=STATE.settings.shopName||'RestoGest';
+        const n=STATE.settings.shopName||'restodiaf';
         $('#headerTitle').textContent=n;$('#headerLogo').textContent=n[0].toUpperCase();
         renderView();
       }catch(e){console.error(e);}
@@ -1058,6 +1067,7 @@ const Cloud=(()=>{
 
   const Cloud={
     configured:()=>!!cfg(),
+    inCode,
     cfg,
     state:()=>state,
     statusHTML,
@@ -1073,7 +1083,7 @@ const Cloud=(()=>{
         await loadSDK();
         const conf={apiKey:c.apiKey,projectId:c.projectId,authDomain:c.projectId+'.firebaseapp.com'};
         if(c.appId)conf.appId=c.appId;
-        const app=firebase.apps.find(a=>a.name==='restogest')||firebase.initializeApp(conf,'restogest');
+        const app=firebase.apps.find(a=>a.name==='restodiaf')||firebase.initializeApp(conf,'restodiaf');
         fs=app.firestore();
         try{await fs.enablePersistence({synchronizeTabs:true});}catch(e){/* déjà actif ou non supporté */}
         try{if(app.auth){const au=app.auth();if(!au.currentUser)await au.signInAnonymously();}}catch(e){console.warn('Auth anonyme :',e&&e.message);}
@@ -1121,6 +1131,13 @@ const Cloud=(()=>{
 
 function cloudCardHTML(){
   const c=Cloud.cfg()||{};
+  if(Cloud.inCode())return `
+    <div class="card">
+      <div class="section-title" style="margin:0 0 12px">Base de données Firebase</div>
+      <div id="cloudStatus" style="font-size:.8rem;margin-bottom:10px;line-height:1.5">${Cloud.statusHTML()}</div>
+      <p style="font-size:.72rem;color:var(--muted);line-height:1.55;margin-bottom:12px">Projet <b>${esc(c.projectId)}</b> · données dans <b>shops/${esc(c.shop)}</b>. La configuration est intégrée à l'application.</p>
+      <button class="btn ghost full" onclick="cloudResendAll()">${ic('trend',16)}Tout renvoyer vers le cloud</button>
+    </div>`;
   return `
     <div class="card">
       <div class="section-title" style="margin:0 0 12px">Base de données Firebase</div>
@@ -1284,7 +1301,7 @@ function renderDash(){
   el.innerHTML=`
     <div id="installBanner" class="install-banner hidden">
       ${ic('install',24)}
-      <div class="ib-txt"><b>Installer l'application</b>Ajoutez RestoGest à votre écran d'accueil.</div>
+      <div class="ib-txt"><b>Installer l'application</b>Ajoutez restodiaf à votre écran d'accueil.</div>
       <button class="ib-close" onclick="dismissInstall()">${ic('x',13)}</button>
     </div>
 
@@ -1989,7 +2006,7 @@ window.setStatsPeriod=function(p){STATE.statsPeriod=p;renderStats();};
    ============================================================ */
 function renderSettings(){
   const el=$('#view-settings');
-  const name=STATE.settings.shopName||'RestoGest';
+  const name=STATE.settings.shopName||'restodiaf';
   el.innerHTML=`
     <div class="card">
       <div class="section-title" style="margin:0 0 12px">Identité de l'établissement</div>
@@ -2027,12 +2044,12 @@ function renderSettings(){
     </div>
 
     <div style="text-align:center;color:var(--muted);font-size:.7rem;margin-top:20px;padding:12px">
-      RestoGest v1.0 · ${new Date().getFullYear()}
+      restodiaf v1.0 · ${new Date().getFullYear()}
     </div>
   `;
 }
 window.saveShopName=async function(){
-  const v=$('#shopName').value.trim()||'RestoGest';
+  const v=$('#shopName').value.trim()||'restodiaf';
   await idbPut('settings',{key:'shopName',value:v});
   STATE.settings.shopName=v;
   $('#headerTitle').textContent=v;
@@ -2040,11 +2057,11 @@ window.saveShopName=async function(){
   toast('Enregistré','success');
 };
 window.exportJSON=function(){
-  const payload={app:'RestoGest',version:1,createdAt:new Date().toISOString(),dishes:STATE.dishes,batches:STATE.batches,sales:STATE.sales,settings:STATE.settings};
+  const payload={app:'restodiaf',version:1,createdAt:new Date().toISOString(),dishes:STATE.dishes,batches:STATE.batches,sales:STATE.sales,settings:STATE.settings};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;a.download=`restogest-backup-${todayStr()}.json`;
+  a.href=url;a.download=`restodiaf-backup-${todayStr()}.json`;
   a.click();URL.revokeObjectURL(url);
   toast('Sauvegarde téléchargée','success');
 };
@@ -2055,7 +2072,7 @@ window.exportCSV=function(){
   const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;a.download=`restogest-ventes-${todayStr()}.csv`;
+  a.href=url;a.download=`restodiaf-ventes-${todayStr()}.csv`;
   a.click();URL.revokeObjectURL(url);
   toast('CSV téléchargé','success');
 };
@@ -2064,7 +2081,7 @@ window.resetAll=async function(){
   if(!confirm('Confirmez-vous la suppression totale ?'))return;
   await Promise.all([idbClear('dishes'),idbClear('batches'),idbClear('sales'),idbClear('settings')]);
   STATE.dishes=[];STATE.batches=[];STATE.sales=[];STATE.settings={};
-  $('#headerTitle').textContent='RestoGest';
+  $('#headerTitle').textContent='restodiaf';
   $('#headerLogo').textContent='R';
   renderView();
   toast('Application réinitialisée','success');
@@ -2083,7 +2100,7 @@ window.addEventListener('appinstalled',()=>{
 });
 function setupManifest(){
   const iconSvg="data:image/svg+xml,"+encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='112' fill='#1a2340'/><text x='256' y='350' font-family='Arial,sans-serif' font-size='290' font-weight='900' fill='#f5c542' text-anchor='middle'>R</text></svg>`);
-  const manifest={name:'RestoGest',short_name:'RestoGest',description:'Gestion de restaurant.',start_url:'.',display:'standalone',orientation:'portrait',background_color:'#1a2340',theme_color:'#1a2340',lang:'fr',icons:[{src:iconSvg,sizes:'192x192',type:'image/svg+xml',purpose:'any'},{src:iconSvg,sizes:'512x512',type:'image/svg+xml',purpose:'any maskable'}]};
+  const manifest={name:'restodiaf',short_name:'restodiaf',description:'Gestion de restaurant.',start_url:'.',display:'standalone',orientation:'portrait',background_color:'#1a2340',theme_color:'#1a2340',lang:'fr',icons:[{src:iconSvg,sizes:'192x192',type:'image/svg+xml',purpose:'any'},{src:iconSvg,sizes:'512x512',type:'image/svg+xml',purpose:'any maskable'}]};
   const link=$('#manifest-link');
   if(link)link.href='data:application/manifest+json,'+encodeURIComponent(JSON.stringify(manifest));
 }
@@ -2096,7 +2113,7 @@ async function init(){
   try{
     await openDB();
     await loadAll();
-    let name=STATE.settings.shopName||'RestoGest';
+    let name=STATE.settings.shopName||'restodiaf';
     $('#headerTitle').textContent=name;
     $('#headerLogo').textContent=name[0].toUpperCase();
     /* Chargement des données depuis Firebase dès l'ouverture (5 s maximum d'attente) */
@@ -2105,7 +2122,7 @@ async function init(){
       Cloud.start();
       await Promise.race([Cloud.whenLoaded(),new Promise(r=>setTimeout(r,5000))]);
       await loadAll();
-      name=STATE.settings.shopName||'RestoGest';
+      name=STATE.settings.shopName||'restodiaf';
       $('#headerTitle').textContent=name;
       $('#headerLogo').textContent=name[0].toUpperCase();
     }
