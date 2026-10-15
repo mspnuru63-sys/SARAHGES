@@ -196,7 +196,8 @@ img,svg{display:block;max-width:100%}
 /* ============== GAUGE ============== */
 .gauge{position:relative;width:88px;height:88px;flex-shrink:0}
 .gauge svg{width:100%;height:100%;transform:rotate(-90deg);display:block}
-.gauge circle{fill:none;stroke-width:8;stroke-linecap:round;transition:stroke-dasharray .9s cubic-bezier(.2,.8,.2,1)}
+.gauge circle{fill:none;stroke-width:9;stroke-linecap:round;transition:stroke-dasharray .9s cubic-bezier(.2,.8,.2,1),stroke .4s}
+.gauge svg{overflow:visible}
 .gauge .track{stroke:var(--line)}
 .gauge .bar{stroke:var(--gold-d)}
 .gauge .center{
@@ -213,7 +214,7 @@ img,svg{display:block;max-width:100%}
   color:var(--muted);font-weight:700;margin-top:3px;line-height:1;
 }
 .gauge.sm{width:72px;height:72px}
-.gauge.sm circle{stroke-width:7}
+.gauge.sm circle{stroke-width:11}
 .gauge.sm .center b{font-size:.95rem}
 .gauge.sm .center small{font-size:.46rem;letter-spacing:.4px}
 .gauge.md{width:100px;height:100px}
@@ -826,6 +827,44 @@ img,svg,canvas,video{max-width:100%}
 #cloudBtn[data-s="connecting"]::after,#cloudBtn[data-s="offline"]::after{background:#f39c12}
 #cloudBtn[data-s="error"]::after{background:#e74c3c}
 
+/* ============== COULEURS DES JAUGES ============== */
+.gauge[data-zero="1"] .bar{opacity:0}
+.gauge[data-lv="low"] .bar{stroke:#e74c3c}
+.gauge[data-lv="mid"] .bar{stroke:#f39c12}
+.gauge[data-lv="high"] .bar{stroke:#22a05a}
+.stock-body .gauge[data-lv="low"] .center b{color:#e74c3c}
+.stock-body .gauge[data-lv="mid"] .center b{color:#d9820a}
+.stock-body .gauge[data-lv="high"] .center b{color:#1f8f50}
+
+/* ============== IMAGES D'ALIMENTS ============== */
+.av.food,.stock-head .av.food,.item .av.food{
+  background:#fff!important;color:inherit;border:1.5px solid var(--line);
+  overflow:hidden;padding:0;box-shadow:0 1px 4px rgba(20,26,43,.06);
+}
+.av.food span{font-size:1.7rem;line-height:1;display:block}
+.av.food img{width:100%;height:100%;object-fit:contain;display:block;background:#fff}
+.av.food.lg{width:48px;height:48px;border-radius:14px;flex-shrink:0;display:grid;place-items:center;cursor:pointer}
+#bImgPrev{width:52px;height:52px;border-radius:14px;flex-shrink:0;display:grid;place-items:center}
+.img-pick{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--card);border:1.5px solid var(--line);border-radius:14px;cursor:pointer;transition:.18s}
+.img-pick:active{transform:scale(.99)}
+.img-pick .ip-txt{flex:1;min-width:0}
+.img-pick .ip-txt b{display:block;font-size:.84rem;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.img-pick .ip-txt small{display:block;font-size:.68rem;color:var(--muted);margin-top:2px}
+.img-pick .ip-go{color:var(--muted);flex-shrink:0}
+#foodPicker{z-index:400}
+.food-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:9px;margin-top:12px;max-height:46vh;max-height:46dvh;overflow-y:auto;padding:2px}
+.food-opt{
+  display:flex;flex-direction:column;align-items:center;gap:5px;padding:10px 4px 8px;
+  background:#fff;border:1.5px solid var(--line);border-radius:14px;cursor:pointer;
+  font:inherit;color:var(--text);transition:.15s;min-width:0;
+}
+.food-opt span{font-size:1.9rem;line-height:1}
+.food-opt small{font-size:.6rem;font-weight:700;color:var(--muted);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.food-opt:active{transform:scale(.95)}
+.food-opt.on{border-color:var(--gold);box-shadow:0 0 0 3px rgba(245,197,66,.28)}
+@media (hover:hover){.food-opt:hover{border-color:var(--gold)}}
+@media (max-width:340px){.av.food span{font-size:1.45rem}.food-grid{grid-template-columns:repeat(auto-fill,minmax(66px,1fr))}}
+
 /* Accessibilité : réduire les animations si demandé */
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
@@ -1279,16 +1318,25 @@ const ic=(n,s=18)=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 /* ============================================================
    GAUGE
    ============================================================ */
+const GAUGE_R=42,GAUGE_C=2*Math.PI*GAUGE_R;
+const gaugeLevel=p=>p>=75?'high':p>=35?'mid':'low';   /* faible : rouge · moyen : orange · presque plein : vert */
 function gauge(pct,label='vendu',size=''){
-  const C=2*Math.PI*15.9155;
-  const dash=(pct/100)*C;
-  return `<div class="gauge ${size}">
-    <svg viewBox="0 0 36 36">
-      <circle class="track" cx="18" cy="18" r="15.9155"/>
-      <circle class="bar" cx="18" cy="18" r="15.9155" stroke-dasharray="${dash} ${C}"/>
+  pct=Math.max(0,Math.min(100,Math.round(+pct||0)));
+  return `<div class="gauge ${size}" data-lv="${gaugeLevel(pct)}" data-zero="${pct===0?1:0}">
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <circle class="track" cx="50" cy="50" r="${GAUGE_R}"/>
+      <circle class="bar" cx="50" cy="50" r="${GAUGE_R}" stroke-dasharray="${(pct/100)*GAUGE_C} ${GAUGE_C}"/>
     </svg>
     <div class="center"><b>${pct}%</b><small>${label}</small></div>
   </div>`;
+}
+/* Mise à jour dynamique d'une jauge existante (valeur, remplissage et couleur) */
+function setGauge(g,pct){
+  if(!g)return;
+  pct=Math.max(0,Math.min(100,Math.round(+pct||0)));
+  g.dataset.lv=gaugeLevel(pct);g.dataset.zero=pct===0?1:0;
+  const b=g.querySelector('.center b');if(b)b.textContent=pct+'%';
+  const bar=g.querySelector('.bar');if(bar)bar.setAttribute('stroke-dasharray',`${(pct/100)*GAUGE_C} ${GAUGE_C}`);
 }
 
 /* ============================================================
@@ -1607,7 +1655,7 @@ function updateStockList(){
     const profitClass=t.realProfit>=0?'green':'red';
     return `<div class="stock-card" onclick="openBatchDetail('${b.id}')">
       <div class="stock-head">
-        <div class="av">${initials(b.name)}</div>
+        ${foodThumbHTML(b)}
         <div class="s-info">
           <b>${esc(b.name)}</b>
           <small>${t.total} morceaux · Acheté ${money(t.cost)}</small>
@@ -1641,7 +1689,14 @@ window.openBatchModal=function(){
     </div>
     <div class="modal-body">
       <form onsubmit="return saveBatch(event)">
-        <div class="field"><label>Nom du lot *</label><input type="text" id="bName" required placeholder="Ex : Carton de cuisses de poulet"></div>
+        <div class="field"><label>Nom du lot *</label><input type="text" id="bName" required placeholder="Ex : Carton de cuisses de poulet" oninput="if(!window._batchImg)refreshBatchImgPreview()"></div>
+        <div class="field"><label>Image du lot</label>
+          <div class="img-pick" onclick="pickBatchImage()">
+            <div class="av food" id="bImgPrev"></div>
+            <div class="ip-txt"><b id="bImgLbl">Image automatique selon le nom</b><small>Touchez pour rechercher une image d'aliment</small></div>
+            <span class="ip-go">${ic('search',16)}</span>
+          </div>
+        </div>
         <div class="form-grid">
           <div class="field"><label>Prix d'achat (F) *</label><input type="number" id="bPrice" required min="0" step="1" placeholder="17500"></div>
           <div class="field"><label>Nombre de morceaux *</label><input type="number" id="bPieces" required min="1" step="1" placeholder="25"></div>
@@ -1653,6 +1708,7 @@ window.openBatchModal=function(){
     </div>
   </div>`;
   document.body.appendChild(m);
+  window._batchImg='';refreshBatchImgPreview();
   setTimeout(()=>$('#bName')?.focus(),80);
 };
 
@@ -1668,7 +1724,7 @@ window.saveBatch=async function(e){
     const id=uid();
     const arr=[];
     for(let i=1;i<=pieces;i++)arr.push({id:uid(),label:'Morceau '+i,price:0,sold:false,soldAt:null});
-    await idbPut('batches',{id,name,purchasePrice:price,purchaseDate:date,note,pieces:arr,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+    await idbPut('batches',{id,name,img:window._batchImg||'',purchasePrice:price,purchaseDate:date,note,pieces:arr,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
     $('#batchModal')?.remove();
     await reloadBat();
     renderView();
@@ -1686,13 +1742,213 @@ window.openBatchDetail=function(id){
   m.innerHTML=`<div class="modal" style="max-width:560px">
     <div class="modal-handle"></div>
     <div class="modal-head">
-      <div><h3 style="font-size:1rem">${esc(b.name)}</h3><p>${b.purchaseDate?fdate(b.purchaseDate):''}${b.note?' · '+esc(b.note):''}</p></div>
+      <div style="display:flex;align-items:center;gap:12px;min-width:0">
+        <div class="av food lg" id="batchModalImg" onclick="changeBatchImage('${id}')" title="Changer l'image">${foodInner(foodOf(b))}</div>
+        <div style="min-width:0"><h3 style="font-size:1rem">${esc(b.name)}</h3><p>${b.purchaseDate?fdate(b.purchaseDate):''}${b.note?' · '+esc(b.note):''}</p></div>
+      </div>
       <button class="close" onclick="this.closest('.modal-bg').remove()">${ic('x',16)}</button>
     </div>
     <div class="modal-body" id="batchBody"></div>
   </div>`;
   document.body.appendChild(m);
   refreshBatchDetail(id);
+};
+
+/* ============================================================
+   IMAGES D'ALIMENTS (catalogue intégré + photo personnelle)
+   ============================================================ */
+const FOODS=[
+  ['🍗','Poulet, aile, cuisse','poulet aile ailes cuisse cuisses volaille pilon braise braisé grille'],
+  ['🐔','Poulet entier','poulet entier poule coq'],
+  ['🥩','Viande de bœuf','boeuf viande steak bifteck rosbif cote'],
+  ['🍖','Viande sur os','viande os gigot cotelette agneau mouton chevre'],
+  ['🥓','Lard, bacon','lard bacon poitrine'],
+  ['🐖','Porc','porc cochon'],
+  ['🐐','Chèvre','chevre cabri'],
+  ['🌭','Saucisse, hot-dog','saucisse hot dog hotdog merguez'],
+  ['🍔','Hamburger','burger hamburger'],
+  ['🍟','Frites','frites patate pomme de terre'],
+  ['🥔','Pomme de terre','pomme de terre patate'],
+  ['🍠','Patate douce, manioc','patate douce manioc igname tubercule'],
+  ['🍕','Pizza','pizza'],
+  ['🌮','Tacos, wrap','tacos wrap shawarma'],
+  ['🥪','Sandwich','sandwich'],
+  ['🥙','Pain garni, kebab','kebab pita'],
+  ['🍞','Pain','pain baguette mie'],
+  ['🥖','Baguette','baguette'],
+  ['🥐','Croissant','croissant viennoiserie'],
+  ['🫓','Galette, crêpe','galette crepe beignet'],
+  ['🥞','Pancakes','pancake crepe'],
+  ['🐟','Poisson','poisson capitaine silure tilapia carpe sardine maquereau thon fumé fume frais'],
+  ['🐠','Poisson tropical','poisson tropical'],
+  ['🍣','Sushi','sushi'],
+  ['🦐','Crevette','crevette crevettes'],
+  ['🍤','Beignet de crevette','crevette frite tempura'],
+  ['🦀','Crabe','crabe'],
+  ['🦞','Homard, langouste','homard langouste'],
+  ['🦑','Calamar, seiche','calamar calmar seiche poulpe'],
+  ['🐙','Poulpe','poulpe pieuvre'],
+  ['🥚','Œufs','oeuf oeufs plateau'],
+  ['🍳','Œuf au plat','oeuf plat omelette'],
+  ['🧀','Fromage','fromage'],
+  ['🧈','Beurre, margarine','beurre margarine'],
+  ['🥛','Lait','lait yaourt'],
+  ['🍚','Riz','riz sac'],
+  ['🍙','Boule de riz','boule riz'],
+  ['🍝','Spaghetti, pâtes','spaghetti pates pate macaroni nouilles'],
+  ['🍜','Nouilles, soupe','nouilles soupe ramen indomie'],
+  ['🍲','Ragoût, sauce','ragout sauce plat mijote saka cossa'],
+  ['🥘','Plat mijoté','plat mijote marmite'],
+  ['🥣','Bouillie, bol','bouillie bol cereale'],
+  ['🥗','Salade','salade crudite'],
+  ['🥬','Légumes verts','legume feuille epinard chou pondu manioc feuille amarante'],
+  ['🥦','Brocoli','brocoli'],
+  ['🥕','Carotte','carotte'],
+  ['🍅','Tomate','tomate concentre'],
+  ['🧅','Oignon','oignon'],
+  ['🧄','Ail','ail'],
+  ['🌶️','Piment','piment pili'],
+  ['🫑','Poivron','poivron'],
+  ['🥒','Concombre','concombre'],
+  ['🍆','Aubergine','aubergine'],
+  ['🌽','Maïs','mais epi'],
+  ['🥜','Arachide','arachide cacahuete cacahuete pistache noix'],
+  ['🍄','Champignon','champignon'],
+  ['🌰','Châtaigne','chataigne marron'],
+  ['🍌','Banane','banane plantain'],
+  ['🍍','Ananas','ananas'],
+  ['🥭','Mangue','mangue'],
+  ['🍉','Pastèque','pasteque melon'],
+  ['🍊','Orange','orange mandarine agrume'],
+  ['🍋','Citron','citron lime'],
+  ['🍎','Pomme','pomme'],
+  ['🍇','Raisin','raisin'],
+  ['🍓','Fraise','fraise'],
+  ['🥥','Noix de coco','coco noix de coco'],
+  ['🥑','Avocat','avocat safou'],
+  ['🍑','Pêche, abricot','peche abricot fruit'],
+  ['🍯','Miel','miel'],
+  ['🧂','Sel, épices','sel epice epices condiment assaisonnement cube maggi'],
+  ['🛢️','Huile','huile bidon palme'],
+  ['🥫','Conserve','conserve boite sardine tomate'],
+  ['🫙','Bocal, sauce','bocal mayonnaise moutarde ketchup sauce'],
+  ['🍫','Chocolat','chocolat'],
+  ['🍪','Biscuit','biscuit cookie gateau sec'],
+  ['🎂','Gâteau','gateau anniversaire patisserie'],
+  ['🍰','Part de gâteau','gateau part patisserie'],
+  ['🍩','Beignet, donut','beignet donut'],
+  ['🍦','Glace','glace creme glacee'],
+  ['🍬','Bonbon','bonbon sucre confiserie'],
+  ['🍚','Farine, sac','farine sac semoule'],
+  ['☕','Café','cafe'],
+  ['🍵','Thé','the infusion'],
+  ['🧃','Jus','jus boisson fruit'],
+  ['🥤','Soda, boisson','soda boisson coca fanta sprite limonade'],
+  ['💧','Eau','eau minerale bouteille'],
+  ['🍺','Bière','biere primus mutzig ngok'],
+  ['🍷','Vin','vin'],
+  ['🥂','Champagne','champagne'],
+  ['🍸','Cocktail','cocktail'],
+  ['🧊','Glaçons','glacon glace'],
+  ['🍽️','Plat, repas','plat repas menu assiette'],
+  ['📦','Carton, divers','carton divers colis lot']
+];
+const fNorm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+function guessFoodEmoji(name){
+  const t=fNorm(name);if(!t.trim())return '';
+  let best=null,bl=0;
+  FOODS.forEach(f=>{
+    fNorm(f[2]+' '+f[1]).split(/[\s,]+/).forEach(k=>{
+      if(k.length>=3&&t.indexOf(k)>=0&&k.length>bl){bl=k.length;best=f[0];}
+    });
+  });
+  return best||'';
+}
+const foodOf=b=>(b&&b.img)||guessFoodEmoji(b&&b.name)||'🍽️';
+const isPhoto=v=>typeof v==='string'&&v.indexOf('data:image')===0;
+function foodInner(v){return isPhoto(v)?`<img src="${v}" alt="">`:`<span>${v}</span>`;}
+function foodThumbHTML(b){return `<div class="av food">${foodInner(foodOf(b))}</div>`;}
+
+/* Photo personnelle : redimensionnée (180 px) sur fond blanc pour rester légère */
+function pickPhoto(cb){
+  const i=document.createElement('input');i.type='file';i.accept='image/*';
+  i.onchange=()=>{
+    const f=i.files&&i.files[0];if(!f)return;
+    const r=new FileReader();
+    r.onload=()=>{
+      const im=new Image();
+      im.onload=()=>{
+        const S=180,c=document.createElement('canvas');c.width=c.height=S;
+        const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,S,S);
+        const k=Math.min(S/im.width,S/im.height),w=im.width*k,h=im.height*k;
+        x.drawImage(im,(S-w)/2,(S-h)/2,w,h);
+        cb(c.toDataURL('image/jpeg',.85));
+      };
+      im.onerror=()=>toast('Image illisible.','err');
+      im.src=r.result;
+    };
+    r.readAsDataURL(f);
+  };
+  i.click();
+}
+
+/* Fenêtre de choix : recherche parmi les images d'aliments */
+window.openFoodPicker=function(current,onPick,hint){
+  const m=document.createElement('div');
+  m.className='modal-bg on';m.id='foodPicker';
+  m.onclick=e=>{if(e.target===m)m.remove();};
+  m.innerHTML=`<div class="modal" style="max-width:520px">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <div><h3>Choisir une image</h3><p>Recherchez un aliment ou ajoutez votre photo.</p></div>
+      <button class="close" onclick="this.closest('.modal-bg').remove()">${ic('x',16)}</button>
+    </div>
+    <div class="modal-body">
+      <div class="search">${ic('search',17)}<input type="search" id="foodQ" placeholder="Poulet, poisson, riz, tomate…" autocomplete="off" value="${esc(hint||'')}"></div>
+      <div class="food-grid" id="foodGrid"></div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn ghost" id="foodPhoto">${ic('plus',16)}Ma photo</button>
+        <button class="btn ghost" id="foodAuto">${ic('undo',16)}Automatique</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  const close=()=>m.remove();
+  const draw=()=>{
+    const q=fNorm($('#foodQ').value).trim();
+    const list=FOODS.filter(f=>!q||fNorm(f[1]+' '+f[2]).indexOf(q)>=0);
+    $('#foodGrid').innerHTML=list.length?list.map(f=>`<button type="button" class="food-opt ${current===f[0]?'on':''}" data-e="${f[0]}" title="${esc(f[1])}"><span>${f[0]}</span><small>${esc(f[1].split(',')[0])}</small></button>`).join('')
+      :`<div class="empty" style="grid-column:1/-1;padding:24px 8px"><small>Aucun aliment trouvé. Essayez un autre mot ou ajoutez votre photo.</small></div>`;
+  };
+  draw();
+  $('#foodQ').addEventListener('input',draw);
+  $('#foodGrid').addEventListener('click',e=>{const b=e.target.closest('.food-opt');if(!b)return;onPick(b.dataset.e);close();});
+  $('#foodPhoto').onclick=()=>pickPhoto(v=>{onPick(v);close();});
+  $('#foodAuto').onclick=()=>{onPick('');close();};
+};
+
+/* Création d'un lot : aperçu dynamique de l'image */
+window._batchImg='';
+window.refreshBatchImgPreview=function(){
+  const el=$('#bImgPrev');if(!el)return;
+  const v=window._batchImg||guessFoodEmoji($('#bName')?$('#bName').value:'')||'🍽️';
+  el.innerHTML=foodInner(v);
+  const l=$('#bImgLbl');if(l)l.textContent=window._batchImg?'Image choisie':'Image automatique selon le nom';
+};
+window.pickBatchImage=function(){
+  openFoodPicker(window._batchImg,v=>{window._batchImg=v;refreshBatchImgPreview();},$('#bName')?$('#bName').value.trim().split(/\s+/).slice(-1)[0]:'');
+};
+/* Changer l'image d'un lot existant (touche l'image dans la fiche du lot) */
+window.changeBatchImage=function(id){
+  const b=STATE.batches.find(x=>x.id===id);if(!b)return;
+  openFoodPicker(b.img||'',async v=>{
+    const cur=STATE.batches.find(x=>x.id===id);if(!cur)return;
+    cur.img=v;cur.updatedAt=new Date().toISOString();
+    await idbPut('batches',cur);await reloadBat();
+    const t=$('#batchModalImg');if(t)t.innerHTML=foodInner(foodOf(STATE.batches.find(x=>x.id===id)));
+    if(STATE.view==='stock')updateStockList();
+    toast('Image mise à jour','success');
+  });
 };
 
 /* ---------- Historique des morceaux non vendus ---------- */
@@ -1838,11 +2094,7 @@ function refreshBatchDetailTotals(batchId){
     val.textContent=(t.realProfit>=0?'+':'')+money(t.realProfit);
     val.className='bh-val '+(t.realProfit>=0?'green':'red');
     hero.querySelector('.bh-sub').textContent=`${t.sold}/${t.total} vendu(s) · Potentiel : ${money(t.potentialProfit)}`;
-    const gb=hero.querySelector('.gauge .center b');
-    if(gb)gb.textContent=t.pct+'%';
-    const gbar=hero.querySelector('.gauge .bar');
-    const C=2*Math.PI*15.9155;
-    if(gbar)gbar.setAttribute('stroke-dasharray',`${(t.pct/100)*C} ${C}`);
+    setGauge(hero.querySelector('.gauge'),t.pct);
   }
   const minis=body.querySelectorAll('.stat-mini b');
   if(minis.length>=4){
