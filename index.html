@@ -536,6 +536,26 @@ img,svg{display:block;max-width:100%}
 .piece-row.sold .ptoggle{background:var(--success)}
 .piece-row.sold .ptoggle::after{left:18px}
 
+/* ============== MORCEAUX NON VENDUS ============== */
+.piece-row.unsold{background:rgba(243,156,18,.07);border-color:rgba(243,156,18,.38)}
+.piece-row.unsold .num{background:rgba(243,156,18,.2);color:#c77a0a}
+.pchip{
+  display:inline-flex;align-items:center;gap:4px;margin-top:5px;padding:4px 9px;
+  border-radius:20px;border:1.5px solid var(--line);background:var(--bg);color:var(--muted);
+  font:inherit;font-size:.64rem;font-weight:700;cursor:pointer;transition:.18s;
+}
+.pchip:active{transform:scale(.96)}
+.pchip.restore{border-color:rgba(243,156,18,.45);color:#c77a0a;background:rgba(243,156,18,.1)}
+.uh-now{color:#c77a0a!important;font-weight:800}
+.uh-sold{color:var(--success)!important;font-weight:800}
+.uh-back{color:#3b82c4!important;font-weight:800}
+.uh-gone{color:var(--muted-2,#9aa3b2)!important}
+.uh-av{background:rgba(243,156,18,.16)!important;color:#c77a0a!important}
+.uh-sum{display:flex;gap:10px;margin-bottom:10px}
+.uh-sum div{flex:1;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:11px 12px;min-width:0}
+.uh-sum b{display:block;font-size:1.05rem;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.uh-sum span{font-size:.62rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+
 /* ============== STAT LINE ============== */
 .stat-line{
   display:flex;align-items:center;gap:12px;
@@ -1181,17 +1201,20 @@ const qtySoldDay=d=>salesOfDay(d).reduce((a,s)=>a+(+s.qty||0),0);
 const allTimeRevenue=()=>STATE.sales.reduce((a,s)=>a+(+s.total||0),0);
 
 function batchTotals(b){
-  const pieces=b.pieces||[];
+  const allPieces=b.pieces||[];
+  /* Un morceau « non vendu » sort du lot : il n'est plus compté dans la quantité, le revenu potentiel ni le bénéfice potentiel */
+  const pieces=allPieces.filter(p=>!(p.unsold&&!p.sold));
   const total=pieces.length;
   const sold=pieces.filter(p=>p.sold).length;
   const unsold=total-sold;
+  const unsoldMarked=allPieces.length-pieces.length;
   const potential=pieces.reduce((a,p)=>a+(+p.price||0),0);
   const realRevenue=pieces.filter(p=>p.sold).reduce((a,p)=>a+(+p.price||0),0);
   const cost=+b.purchasePrice||0;
   const realProfit=realRevenue-cost;
   const potentialProfit=potential-cost;
   const pct=total?Math.round(sold/total*100):0;
-  return {total,sold,unsold,potential,realRevenue,cost,realProfit,potentialProfit,pct};
+  return {total,totalAll:allPieces.length,sold,unsold,unsoldMarked,potential,realRevenue,cost,realProfit,potentialProfit,pct};
 }
 function bestDish(d){
   const map={};
@@ -1235,6 +1258,7 @@ const IC={
   trash:'<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
   check:'<path d="M20 6 9 17l-5-5"/>',
   x:'<path d="M18 6 6 18M6 6l12 12"/>',
+  undo:'<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/>',
   cart:'<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>',
   money:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
   box:'<path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
@@ -1594,6 +1618,7 @@ function updateStockList(){
         <div class="s-progress">
           <div class="sp-row"><span>Progression</span><b>${t.sold}/${t.total}</b></div>
           <div class="sp-bar"><div style="width:${t.pct}%"></div></div>
+          ${t.unsoldMarked?`<div class="sp-row" style="margin:-2px 0 6px"><span>Non vendus</span><b style="color:#c77a0a">${t.unsoldMarked}</b></div>`:''}
           <div class="sp-grid">
             <div><span>Revenu réel</span><b>${money(t.realRevenue)}</b></div>
             <div><span>Bénéfice</span><b class="${profitClass}">${t.realProfit>=0?'+':''}${money(t.realProfit)}</b></div>
@@ -1670,6 +1695,49 @@ window.openBatchDetail=function(id){
   refreshBatchDetail(id);
 };
 
+/* ---------- Historique des morceaux non vendus ---------- */
+function logPieceEvent(b,p,type){
+  b.events=b.events||[];
+  b.events.push({id:uid(),pieceId:p.id,label:p.label||'Morceau',type,price:+p.price||0,at:new Date().toISOString(),date:todayStr()});
+}
+function unsoldEvents(b){
+  const ev=(b.events||[]).filter(e=>e.type==='unsold');
+  const lastOf={};ev.forEach(e=>{lastOf[e.pieceId]=e.id;});
+  return ev.map(e=>{
+    const p=(b.pieces||[]).find(x=>x.id===e.pieceId);
+    let st;
+    if(!p)st=['gone','Supprimé'];
+    else if(lastOf[e.pieceId]!==e.id)st=['back','Remis en stock'];
+    else if(p.sold)st=['sold','Vendu depuis'];
+    else if(p.unsold)st=['now','Non vendu'];
+    else st=['back','Remis en stock'];
+    return {...e,b,st};
+  });
+}
+const evTime=e=>{try{return new Date(e.at).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}catch(x){return '';}};
+const piecesCaption=t=>`${t.sold}/${t.total} vendu(s)`+(t.unsoldMarked?` · ${t.unsoldMarked} non vendu(s)`:'');
+function unsoldRowHTML(e,withLot,clickable){
+  return `<div class="item"${clickable?` onclick="openBatchDetail('${e.b.id}')"`:''}>
+    <div class="av uh-av">${ic('x',18)}</div>
+    <div class="info">
+      <b>${esc(e.label)}</b>
+      <small>${withLot?esc(e.b.name)+' · ':''}${fdate(e.date)} · ${evTime(e)}</small>
+    </div>
+    <div class="price">${money(e.price)}<small class="uh-${e.st[0]}">${e.st[1]}</small></div>
+  </div>`;
+}
+function unsoldHistoryHTML(b){
+  const ev=unsoldEvents(b).sort((a,c)=>c.at.localeCompare(a.at));
+  return `<div class="section-title" style="margin:22px 0 10px">Historique non vendus <small>${ev.length}</small></div>
+    ${ev.length?`<div class="list">${ev.map(e=>unsoldRowHTML(e,false,false)).join('')}</div>`
+      :`<div class="card"><div class="empty" style="padding:22px 12px"><small>Aucun morceau non vendu pour ce lot.</small></div></div>`}`;
+}
+function afterPieceChange(batchId){
+  refreshBatchDetail(batchId);
+  if(STATE.view==='stock')updateStockList();
+  if(STATE.view==='history')renderHistory();
+}
+
 function refreshBatchDetail(id){
   const b=STATE.batches.find(x=>x.id===id);
   const body=$('#batchBody');if(!b||!body)return;
@@ -1693,7 +1761,7 @@ function refreshBatchDetail(id){
       <div class="stat-mini"><b>${t.unsold}</b><small>Restants</small></div>
     </div>
 
-    <div class="section-title" style="margin:22px 0 10px">Morceaux <small>${t.sold}/${t.total} vendu(s)</small></div>
+    <div class="section-title" style="margin:22px 0 10px">Morceaux <small id="piecesCaption">${piecesCaption(t)}</small></div>
 
     <div class="bulk-box">
       <label>Prix groupé (FCFA) — appliquer à tous les morceaux</label>
@@ -1705,17 +1773,22 @@ function refreshBatchDetail(id){
 
     <div class="list" id="piecesList">
       ${(b.pieces||[]).map((p,i)=>`
-        <div class="piece-row ${p.sold?'sold':''}" data-pid="${p.id}">
+        <div class="piece-row ${p.sold?'sold':''} ${(p.unsold&&!p.sold)?'unsold':''}" data-pid="${p.id}">
           <div class="num">${i+1}</div>
           <div class="pinfo">
             <b>${esc(p.label||('Morceau '+(i+1)))}</b>
-            <small>${p.price?money(p.price):'Prix non défini'}${p.sold?' · Vendu':''}</small>
+            <small>${p.price?money(p.price):'Prix non défini'}${p.sold?' · Vendu':(p.unsold?' · Non vendu':'')}</small>
+            ${(p.unsold&&!p.sold)
+              ?`<button class="pchip restore" onclick="restorePiece('${id}','${p.id}')">${ic('undo',11)}Remettre en stock</button>`
+              :`<button class="pchip" onclick="markPieceUnsold('${id}','${p.id}')">${ic('x',11)}Marquer non vendu</button>`}
           </div>
           <input type="number" class="piece-price" data-pid="${p.id}" value="${p.price||''}" placeholder="Prix" min="0" step="1" style="width:74px;padding:7px 9px;border:1.5px solid var(--line);border-radius:9px;background:var(--bg);color:var(--text);font-size:.8rem;font-weight:700;text-align:right" onchange="updatePiecePrice('${id}','${p.id}',this.value)">
           <div class="ptoggle" onclick="togglePieceSold('${id}','${p.id}')"></div>
         </div>
       `).join('')}
     </div>
+
+    ${unsoldHistoryHTML(b)}
 
     <div class="btn-row" style="margin-top:16px">
       <button class="btn ghost" onclick="addPieces('${id}')">${ic('plus',16)}Ajouter</button>
@@ -1749,7 +1822,7 @@ window.updatePiecePrice=async function(batchId,pieceId,val){
   if(row){
     const small=row.querySelector('.pinfo small');
     const p=(STATE.batches.find(x=>x.id===batchId).pieces||[]).find(x=>x.id===pieceId);
-    small.textContent=(p.price?money(p.price):'Prix non défini')+(p.sold?' · Vendu':'');
+    small.textContent=(p.price?money(p.price):'Prix non défini')+(p.sold?' · Vendu':(p.unsold?' · Non vendu':''));
   }
   refreshBatchDetailTotals(batchId);
   if(STATE.view==='stock')updateStockList();
@@ -1773,11 +1846,13 @@ function refreshBatchDetailTotals(batchId){
   }
   const minis=body.querySelectorAll('.stat-mini b');
   if(minis.length>=4){
+    minis[0].textContent=money(t.cost);
+    minis[1].textContent=money(t.potential);
     minis[2].textContent=money(t.realRevenue);
     minis[3].textContent=t.unsold;
   }
-  const st=body.querySelector('.section-title small');
-  if(st)st.textContent=`${t.sold}/${t.total} vendu(s)`;
+  const st=body.querySelector('#piecesCaption');
+  if(st)st.textContent=piecesCaption(t);
 }
 
 window.togglePieceSold=async function(batchId,pieceId){
@@ -1787,6 +1862,7 @@ window.togglePieceSold=async function(batchId,pieceId){
   if(!p.sold && (!p.price||p.price<=0)){toast('Définissez d\'abord un prix.','err');return;}
   p.sold=!p.sold;
   p.soldAt=p.sold?new Date().toISOString():null;
+  if(p.sold){p.unsold=false;p.unsoldAt=null;}
   b.updatedAt=new Date().toISOString();
   await idbPut('batches',b);
   await reloadBat();
@@ -1799,8 +1875,37 @@ window.togglePieceSold=async function(batchId,pieceId){
     if(s){await idbDel('sales',s.id);await reloadSal();}
   }
 
-  refreshBatchDetail(batchId);
-  if(STATE.view==='stock')updateStockList();
+  afterPieceChange(batchId);
+};
+
+window.markPieceUnsold=async function(batchId,pieceId){
+  const b=STATE.batches.find(x=>x.id===batchId);if(!b)return;
+  const p=(b.pieces||[]).find(x=>x.id===pieceId);if(!p)return;
+  if(p.unsold&&!p.sold)return;
+  if(p.sold){
+    if(!confirm('Ce morceau est marqué vendu. Le marquer non vendu annulera la vente. Continuer ?'))return;
+    const s=STATE.sales.find(x=>x.pieceId===pieceId);
+    if(s){await idbDel('sales',s.id);await reloadSal();}
+  }
+  p.sold=false;p.soldAt=null;
+  p.unsold=true;p.unsoldAt=new Date().toISOString();
+  logPieceEvent(b,p,'unsold');
+  b.updatedAt=new Date().toISOString();
+  await idbPut('batches',b);
+  await reloadBat();
+  afterPieceChange(batchId);
+  toast('Morceau marqué non vendu','success');
+};
+
+window.restorePiece=async function(batchId,pieceId){
+  const b=STATE.batches.find(x=>x.id===batchId);if(!b)return;
+  const p=(b.pieces||[]).find(x=>x.id===pieceId);if(!p)return;
+  p.unsold=false;p.unsoldAt=null;
+  b.updatedAt=new Date().toISOString();
+  await idbPut('batches',b);
+  await reloadBat();
+  afterPieceChange(batchId);
+  toast('Morceau remis en stock','success');
 };
 
 window.addPieces=async function(batchId){
@@ -1874,6 +1979,17 @@ function renderHistory(){
         <div class="sl-val">${money(p.total)}</div>
       </div>
     `).join('')}</div>`:`<div class="card"><div class="empty" style="padding:32px 12px">${ic('cal',40)}<b>Aucune vente ce jour</b><small>Sélectionnez une autre date.</small></div></div>`}
+
+    ${(()=>{
+      const evs=[];STATE.batches.forEach(b=>unsoldEvents(b).forEach(e=>evs.push(e)));
+      evs.sort((a,c)=>c.at.localeCompare(a.at));
+      const nowCount=STATE.batches.reduce((a,b)=>a+batchTotals(b).unsoldMarked,0);
+      const nowValue=STATE.batches.reduce((a,b)=>a+(b.pieces||[]).filter(p=>p.unsold&&!p.sold).reduce((x,p)=>x+(+p.price||0),0),0);
+      return `<div class="section-title">Morceaux non vendus <small>${evs.length}</small></div>
+      <div class="uh-sum"><div><b>${nowCount}</b><span>Actuellement</span></div><div><b>${money(nowValue)}</b><span>Valeur non vendue</span></div></div>
+      ${evs.length?`<div class="list">${evs.slice(0,40).map(e=>unsoldRowHTML(e,true,true)).join('')}</div>`
+        :`<div class="card"><div class="empty" style="padding:26px 12px">${ic('x',36)}<b>Aucun morceau non vendu</b><small>Marquez un morceau « non vendu » depuis un lot pour le retrouver ici.</small></div></div>`}`;
+    })()}
 
     <div class="section-title">Jours avec ventes <small>${days.length}</small></div>
     ${days.length?`<div class="list">${days.slice(0,20).map(d=>{
