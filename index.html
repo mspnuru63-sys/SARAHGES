@@ -1763,7 +1763,7 @@ window.openBatchDetail=function(id){
     <div class="modal-head">
       <div style="display:flex;align-items:center;gap:12px;min-width:0">
         <div class="av food lg" id="batchModalImg" onclick="changeBatchImage('${id}')" title="Changer l'image">${foodInner(foodOf(b))}</div>
-        <div style="min-width:0"><h3 style="font-size:1rem">${esc(b.name)}</h3><p>${b.purchaseDate?fdate(b.purchaseDate):''}${b.note?' · '+esc(b.note):''}</p></div>
+        <div style="min-width:0"><h3 style="font-size:1rem" id="bdTitle">${esc(b.name)}</h3><p id="bdSub">${b.purchaseDate?fdate(b.purchaseDate):''}${b.note?' · '+esc(b.note):''}</p></div>
       </div>
       <button class="close" onclick="this.closest('.modal-bg').remove()">${ic('x',16)}</button>
     </div>
@@ -2076,6 +2076,7 @@ function refreshBatchDetail(id){
     ${unsoldHistoryHTML(b)}
 
     <div class="btn-row" style="margin-top:16px">
+      <button class="btn gold" onclick="openEditBatch('${id}')">${ic('edit',16)}Modifier</button>
       <button class="btn ghost" onclick="addPieces('${id}')">${ic('plus',16)}Ajouter</button>
       <button class="btn danger" onclick="deleteBatch('${id}')">${ic('trash',16)}Supprimer</button>
     </div>
@@ -2269,12 +2270,97 @@ window.addPieces=async function(batchId){
   toast(count+' morceau(x) ajouté(s)','success');
 };
 
+/* ---------- Modifier les informations d'un lot ---------- */
+window._editImg='';
+window.refreshEditImgPreview=function(){
+  const el=$('#eImgPrev');if(!el)return;
+  const v=window._editImg||guessFoodEmoji($('#eName')?$('#eName').value:'')||'🍽️';
+  el.innerHTML=foodInner(v);
+  const l=$('#eImgLbl');if(l)l.textContent=window._editImg?'Image choisie':'Image automatique selon le nom';
+};
+window.pickEditImage=function(){
+  openFoodPicker(window._editImg,v=>{window._editImg=v;refreshEditImgPreview();},$('#eName')?$('#eName').value.trim().split(/\s+/).slice(-1)[0]:'');
+};
+window.openEditBatch=function(id){
+  const b=STATE.batches.find(x=>x.id===id);if(!b)return;
+  window._editImg=b.img||'';
+  const m=document.createElement('div');
+  m.className='modal-bg on';m.id='editBatchModal';
+  m.onclick=e=>{if(e.target===m)m.remove();};
+  m.innerHTML=`<div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-head">
+      <div><h3>Modifier le lot</h3><p>Changez les informations de ce lot.</p></div>
+      <button class="close" onclick="this.closest('.modal-bg').remove()">${ic('x',16)}</button>
+    </div>
+    <div class="modal-body">
+      <form onsubmit="return saveEditBatch(event,'${id}')">
+        <div class="field"><label>Nom du lot *</label><input type="text" id="eName" required value="${esc(b.name)}" oninput="if(!window._editImg)refreshEditImgPreview()"></div>
+        <div class="field"><label>Image du lot</label>
+          <div class="img-pick" onclick="pickEditImage()">
+            <div class="av food" id="eImgPrev"></div>
+            <div class="ip-txt"><b id="eImgLbl"></b><small>Touchez pour changer l'image</small></div>
+            <span class="ip-go">${ic('search',16)}</span>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="field"><label>Prix d'achat (F) *</label><input type="number" id="ePrice" required min="0" step="1" inputmode="numeric" value="${Number(b.purchasePrice)||0}"></div>
+          <div class="field"><label>Date d'achat</label><input type="date" id="eDate" value="${esc(b.purchaseDate||todayStr())}"></div>
+        </div>
+        <div class="field"><label>Note (optionnel)</label><input type="text" id="eNote" value="${esc(b.note||'')}" placeholder="Fournisseur, remarque…"></div>
+        <button type="submit" class="btn gold full" style="margin-top:8px">${ic('check',16)}Enregistrer les modifications</button>
+        <button type="button" class="btn danger full" style="margin-top:8px" onclick="deleteBatch('${id}')">${ic('trash',16)}Supprimer ce lot</button>
+      </form>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  refreshEditImgPreview();
+};
+
+window.saveEditBatch=async function(e,id){
+  e.preventDefault();
+  const b=STATE.batches.find(x=>x.id===id);if(!b)return false;
+  const name=$('#eName').value.trim();
+  const price=Number($('#ePrice').value);
+  if(!name||isNaN(price)||price<0){toast('Vérifiez les informations.','err');return false;}
+  const oldName=b.name;
+  b.name=name;b.purchasePrice=price;
+  b.purchaseDate=$('#eDate').value||todayStr();
+  b.note=$('#eNote').value.trim();
+  b.img=window._editImg||'';
+  b.updatedAt=new Date().toISOString();
+  try{
+    await idbPut('batches',b);
+    /* Les ventes déjà enregistrées gardent le bon nom de lot */
+    if(oldName!==name){
+      for(const sl of STATE.sales.filter(x=>x.batchId===id&&typeof x.name==='string'&&x.name.indexOf(oldName+' — ')===0)){
+        await idbPut('sales',{...sl,name:name+sl.name.slice(oldName.length)});
+      }
+      await reloadSal();
+    }
+    await reloadBat();
+    $('#editBatchModal')?.remove();
+    /* Mise à jour en direct de la fiche, de la liste et des autres pages */
+    const nb=STATE.batches.find(x=>x.id===id);
+    const t=$('#bdTitle');if(t)t.textContent=nb.name;
+    const sb=$('#bdSub');if(sb)sb.textContent=(nb.purchaseDate?fdate(nb.purchaseDate):'')+(nb.note?' · '+nb.note:'');
+    const im=$('#batchModalImg');if(im)im.innerHTML=foodInner(foodOf(nb));
+    if($('#batchBody'))refreshBatchDetail(id);
+    if(STATE.view==='stock')updateStockList();else renderView();
+    toast('Lot modifié','success');
+  }catch(err){toast('Erreur : '+err.message,'err');}
+  return false;
+};
+
 window.deleteBatch=async function(id){
   const b=STATE.batches.find(x=>x.id===id);if(!b)return;
-  if(!confirm('Supprimer ce lot ? Les ventes liées seront supprimées.'))return;
   const linked=STATE.sales.filter(s=>s.batchId===id);
+  const rev=linked.reduce((a,x)=>a+(Number(x.total)||0),0);
+  const msg=`Supprimer le lot « ${b.name} » ?`+(linked.length?`\n\n${linked.length} vente${linked.length>1?'s':''} liée${linked.length>1?'s':''} (${money(rev)}) ser${linked.length>1?'ont':'a'} aussi supprimée${linked.length>1?'s':''}.`:'')+'\n\nCette action est définitive.';
+  if(!confirm(msg))return;
   for(const s of linked)await idbDel('sales',s.id);
   await idbDel('batches',id);
+  $('#editBatchModal')?.remove();
   $('#batchDetailModal')?.remove();
   await reloadBat();await reloadSal();
   renderView();
