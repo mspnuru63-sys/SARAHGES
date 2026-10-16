@@ -865,6 +865,25 @@ img,svg,canvas,video{max-width:100%}
 @media (hover:hover){.food-opt:hover{border-color:var(--gold)}}
 @media (max-width:340px){.av.food span{font-size:1.45rem}.food-grid{grid-template-columns:repeat(auto-fill,minmax(66px,1fr))}}
 
+/* ============== SÉLECTION DE MORCEAUX ============== */
+.bulk-box{position:sticky;top:var(--mh,80px);z-index:1;box-shadow:0 6px 14px -8px rgba(20,26,43,.28)}
+.bulk-box .bb-top{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.bulk-box .bb-top b{font-size:.8rem;font-weight:800;color:var(--text)}
+.bulk-box .bb-chips{display:flex;gap:6px;flex-wrap:wrap}
+.bulk-box .bb-chips .pchip{margin-top:0;padding:6px 11px;font-size:.68rem}
+.bulk-box .bb-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bulk-box .bb-two label{margin-bottom:5px}
+.bulk-box .bb-two input{width:100%}
+.bulk-box.has-sel .bb-hint{display:none}
+.bulk-box .bb-hint{display:block;margin-top:8px;font-size:.66rem;color:var(--muted)}
+.piece-row .num{cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;transition:.15s}
+.piece-row .num .ck{display:none}
+.piece-row.sel{background:rgba(245,197,66,.14);border-color:var(--gold)}
+.piece-row.sel .num{background:var(--gold);color:var(--navy);transform:scale(1.04)}
+.piece-row.sel .num .n{display:none}
+.piece-row.sel .num .ck{display:block}
+.piece-row .num:active{transform:scale(.92)}
+
 /* Accessibilité : réduire les animations si demandé */
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
@@ -1751,6 +1770,7 @@ window.openBatchDetail=function(id){
     <div class="modal-body" id="batchBody"></div>
   </div>`;
   document.body.appendChild(m);
+  window._sel={bid:id,ids:new Set()};
   refreshBatchDetail(id);
 };
 
@@ -2020,17 +2040,26 @@ function refreshBatchDetail(id){
     <div class="section-title" style="margin:22px 0 10px">Morceaux <small id="piecesCaption">${piecesCaption(t)}</small></div>
 
     <div class="bulk-box">
-      <label>Prix groupé (FCFA) — appliquer à tous les morceaux</label>
-      <div class="bb-row">
-        <input type="number" id="bulkPrice" min="0" step="1" placeholder="Ex : 800">
-        <button class="btn gold" onclick="applyBulkPrice('${id}')">${ic('check',16)}Appliquer</button>
+      <div class="bb-top">
+        <b id="selCount">0 coché</b>
+        <div class="bb-chips">
+          <button type="button" class="pchip" id="selAllBtn" onclick="selectPieces('${id}','all')">Tout cocher</button>
+          <button type="button" class="pchip" onclick="selectPieces('${id}','noprice')">Sans prix</button>
+          <button type="button" class="pchip" onclick="selectPieces('${id}','todo')">À vendre</button>
+        </div>
       </div>
+      <div class="bb-two">
+        <div><label>Nombre</label><input type="number" id="bulkQty" min="1" step="1" inputmode="numeric" placeholder="Ex : 15" oninput="syncSelUI('${id}')" onkeydown="if(event.key==='Enter'){applyBulkPrice('${id}');}"></div>
+        <div><label>Prix global (F)</label><input type="number" id="bulkPrice" min="0" step="1" inputmode="numeric" placeholder="Ex : 600" onkeydown="if(event.key==='Enter'){applyBulkPrice('${id}');}"></div>
+      </div>
+      <button class="btn gold full" id="bulkApply" style="margin-top:10px" onclick="applyBulkPrice('${id}')">${ic('check',16)}Appliquer</button>
+      <small class="bb-hint">Indiquez un nombre (les premiers morceaux sans prix) ou laissez-le vide pour utiliser les morceaux cochés.</small>
     </div>
 
     <div class="list" id="piecesList">
       ${(b.pieces||[]).map((p,i)=>`
         <div class="piece-row ${p.sold?'sold':''} ${(p.unsold&&!p.sold)?'unsold':''}" data-pid="${p.id}">
-          <div class="num">${i+1}</div>
+          <div class="num" onclick="togglePieceSel('${id}','${p.id}')" role="checkbox" aria-checked="false" title="Cocher"><span class="n">${i+1}</span><span class="ck">${ic('check',15)}</span></div>
           <div class="pinfo">
             <b>${esc(p.label||('Morceau '+(i+1)))}</b>
             <small>${p.price?money(p.price):'Prix non défini'}${p.sold?' · Vendu':(p.unsold?' · Non vendu':'')}</small>
@@ -2051,19 +2080,84 @@ function refreshBatchDetail(id){
       <button class="btn danger" onclick="deleteBatch('${id}')">${ic('trash',16)}Supprimer</button>
     </div>
   `;
+  syncSelUI(id);
 }
+
+/* ---------- Sélection de morceaux + prix global ---------- */
+window._sel={bid:'',ids:new Set()};
+function selIds(bid){if(window._sel.bid!==bid)window._sel={bid,ids:new Set()};return window._sel.ids;}
+const pieceSub=p=>(p.price?money(p.price):'Prix non défini')+(p.sold?' · Vendu':(p.unsold?' · Non vendu':''));
+function syncSelUI(bid){
+  const b=STATE.batches.find(x=>x.id===bid);if(!b)return;
+  const s=selIds(bid),pieces=b.pieces||[];
+  const exist=new Set(pieces.map(p=>p.id));[...s].forEach(i=>{if(!exist.has(i))s.delete(i);});
+  document.querySelectorAll('#piecesList .piece-row').forEach(r=>{
+    const on=s.has(r.dataset.pid);
+    r.classList.toggle('sel',on);
+    const n=r.querySelector('.num');if(n)n.setAttribute('aria-checked',on?'true':'false');
+  });
+  const mh=document.querySelector('#batchDetailModal .modal-head');if(mh){const m=mh.closest('.modal');if(m)m.style.setProperty('--mh',mh.offsetHeight+'px');}
+  const bb=document.querySelector('.bulk-box');if(bb)bb.classList.toggle('has-sel',s.size>0);
+  const c=$('#selCount');if(c)c.textContent=s.size?`${s.size} coché${s.size>1?'s':''} sur ${pieces.length}`:'Aucun coché';
+  const all=pieces.length>0&&pieces.every(p=>s.has(p.id));
+  const ab=$('#selAllBtn');if(ab){ab.textContent=all?'Tout décocher':'Tout cocher';ab.classList.toggle('restore',all);}
+  const q=Math.floor(Number(($('#bulkQty')||{}).value)||0);
+  const ap=$('#bulkApply');if(ap)ap.innerHTML=ic('check',16)+(q>0?`Appliquer à ${q} morceau${q>1?'x':''}`:('Appliquer'+(s.size?' ('+s.size+' coché'+(s.size>1?'s':'')+')':'')));
+}
+window.togglePieceSel=function(bid,pid){
+  const s=selIds(bid);s.has(pid)?s.delete(pid):s.add(pid);syncSelUI(bid);
+};
+window.selectPieces=function(bid,mode){
+  const b=STATE.batches.find(x=>x.id===bid);if(!b)return;
+  const s=selIds(bid),pieces=b.pieces||[];
+  if(mode==='all'){const all=pieces.length&&pieces.every(p=>s.has(p.id));pieces.forEach(p=>all?s.delete(p.id):s.add(p.id));}
+  else{
+    s.clear();
+    pieces.filter(p=>mode==='noprice'?!p.price:(!p.sold&&!p.unsold)).forEach(p=>s.add(p.id));
+    if(!s.size)toast(mode==='noprice'?'Tous les morceaux ont déjà un prix.':'Aucun morceau à vendre.','err');
+  }
+  syncSelUI(bid);
+};
 
 window.applyBulkPrice=async function(batchId){
   const v=Number($('#bulkPrice').value)||0;
   if(v<=0){toast('Entrez un prix valide.','err');return;}
   const b=STATE.batches.find(x=>x.id===batchId);if(!b)return;
-  b.pieces=(b.pieces||[]).map(p=>({...p,price:v}));
+  const pieces=b.pieces||[];
+  const qty=Math.floor(Number($('#bulkQty').value)||0);
+  let ids;
+  if(qty>0){
+    /* Par nombre : d'abord les morceaux à vendre sans prix (dans l'ordre), puis, si besoin, les morceaux à vendre déjà tarifés */
+    const todo=pieces.filter(p=>!p.sold&&!p.unsold);
+    if(qty>todo.length){toast(`Il n'y a que ${todo.length} morceau${todo.length>1?'x':''} à vendre dans ce lot.`,'err');return;}
+    const noPrice=todo.filter(p=>!p.price),priced=todo.filter(p=>p.price);
+    if(qty>noPrice.length){
+      const extra=qty-noPrice.length;
+      if(!confirm(`Il reste seulement ${noPrice.length} morceau${noPrice.length>1?'x':''} sans prix. ${extra} morceau${extra>1?'x':''} déjà tarifé${extra>1?'s':''} ser${extra>1?'ont':'a'} modifié${extra>1?'s':''}. Continuer ?`))return;
+    }
+    ids=new Set(noPrice.concat(priced).slice(0,qty).map(p=>p.id));
+  }else{
+    ids=new Set(selIds(batchId));
+    if(!ids.size){toast('Indiquez un nombre de morceaux ou cochez-les d\'abord.','err');return;}
+  }
+  b.pieces=pieces.map(p=>ids.has(p.id)?{...p,price:v}:p);
   b.updatedAt=new Date().toISOString();
   await idbPut('batches',b);
   await reloadBat();
-  refreshBatchDetail(batchId);
+  /* Mise à jour en place : pas de rechargement de la liste, la position de défilement est conservée */
+  const nb=STATE.batches.find(x=>x.id===batchId);
+  ids.forEach(pid=>{
+    const row=document.querySelector(`.piece-row[data-pid="${pid}"]`);if(!row)return;
+    const p=(nb.pieces||[]).find(x=>x.id===pid);if(!p)return;
+    const inp=row.querySelector('.piece-price');if(inp)inp.value=p.price||'';
+    const sm=row.querySelector('.pinfo small');if(sm)sm.textContent=pieceSub(p);
+  });
+  selIds(batchId).clear();
+  $('#bulkPrice').value='';$('#bulkQty').value='';
+  syncSelUI(batchId);
+  refreshBatchDetailTotals(batchId);
   if(STATE.view==='stock')updateStockList();
-  toast('Prix appliqué à tous','success');
+  toast(`${ids.size} morceau${ids.size>1?'x':''} à ${money(v)}`,'success');
 };
 
 window.updatePiecePrice=async function(batchId,pieceId,val){
@@ -2078,7 +2172,7 @@ window.updatePiecePrice=async function(batchId,pieceId,val){
   if(row){
     const small=row.querySelector('.pinfo small');
     const p=(STATE.batches.find(x=>x.id===batchId).pieces||[]).find(x=>x.id===pieceId);
-    small.textContent=(p.price?money(p.price):'Prix non défini')+(p.sold?' · Vendu':(p.unsold?' · Non vendu':''));
+    small.textContent=pieceSub(p);
   }
   refreshBatchDetailTotals(batchId);
   if(STATE.view==='stock')updateStockList();
